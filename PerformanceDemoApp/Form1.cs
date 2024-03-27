@@ -5,6 +5,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
+using System.Xml;
 using System.Xml.Linq;
 using PerformanceDemoApp.Entities;
 
@@ -29,7 +30,7 @@ namespace PerformanceDemoApp
             vehicleListView.Columns.Add("EV Typ", -2, HorizontalAlignment.Left);
             vehicleListView.Columns.Add("Elektrische Reichweite (km)", -2, HorizontalAlignment.Left);
         }
-        
+
         private void OnForm1Shown(object sender, EventArgs e)
         {
             LoadXmlData();
@@ -40,35 +41,116 @@ namespace PerformanceDemoApp
         private void LoadXmlData()
         {
             var xmlPath = Path.Combine(Application.StartupPath, "electric-vehicle-population.xml");
-            var xDocument = XDocument.Load(xmlPath);
+            var rows = new List<Row>();
+            int rowCount = 0;
+            const int maxRows = 10000;
 
-            _allRows = xDocument.Descendants("row")
-                                .Select(element => new Row
+            using (var reader = XmlReader.Create(xmlPath))
+            {
+                while (reader.Read() && rowCount < maxRows)
+                {
+                    if (reader.NodeType == XmlNodeType.Element && reader.Name == "row")
+                    {
+                        var row = new Row
+                        {
+                            Id = reader.GetAttribute("_id"),
+                            Address = reader.GetAttribute("_address")
+                        };
+
+                        if (!reader.IsEmptyElement)
+                        {
+                            while (reader.Read())
+                            {
+                                if (reader.NodeType == XmlNodeType.Element)
                                 {
-                                    Id = element.Attribute("_id")?.Value ?? string.Empty,
-                                    Uuid = element.Attribute("_uuid")?.Value ?? string.Empty,
-                                    Position = Convert.ToInt32(element.Attribute("_position")?.Value),
-                                    Address = element.Attribute("_address")?.Value ?? string.Empty,
-                                    Vin110 = element.Element("vin_1_10")?.Value ?? string.Empty,
-                                    County = element.Element("county")?.Value ?? string.Empty,
-                                    City = element.Element("city")?.Value ?? string.Empty,
-                                    State = element.Element("state")?.Value ?? string.Empty,
-                                    ZipCode = element.Element("zip_code")?.Value ?? string.Empty,
-                                    ModelYear = Convert.ToInt32(element.Element("model_year")?.Value),
-                                    Make = element.Element("make")?.Value ?? string.Empty,
-                                    Model = element.Element("model")?.Value ?? string.Empty,
-                                    EvType = element.Element("ev_type")?.Value ?? string.Empty,
-                                    CafvType = element.Element("cafv_type")?.Value ?? string.Empty,
-                                    ElectricRange = Convert.ToInt32(element.Element("electric_range")?.Value),
-                                    BaseMsrp = Convert.ToDecimal(element.Element("base_msrp")?.Value),
-                                    LegislativeDistrict = Convert.ToInt32(element.Element("legislative_district")?.Value),
-                                    DolVehicleId = Convert.ToInt64(element.Element("dol_vehicle_id")?.Value),
-                                    GeocodedColumn = element.Element("geocoded_column")?.Value ?? string.Empty,
-                                    ElectricUtility = element.Element("electric_utility")?.Value ?? string.Empty,
-                                    CensusTract = element.Element("_2020_census_tract")?.Value ?? string.Empty
-                                })
-                                .Take(10000)
-                                .ToList();
+                                    string elementName = reader.Name;
+                                    if (reader.IsEmptyElement)
+                                    {
+                                        continue;
+                                    }
+
+                                    reader.Read();
+                                    string content = reader.HasValue ? reader.Value : null;
+
+                                    switch (elementName)
+                                    {
+                                        case "vin_1_10":
+                                            row.Vin110 = content;
+                                            break;
+                                        case "county":
+                                            row.County = content;
+                                            break;
+                                        case "city":
+                                            row.City = content;
+                                            break;
+                                        case "state":
+                                            row.State = content;
+                                            break;
+                                        case "zip_code":
+                                            row.ZipCode = content;
+                                            break;
+                                        case "model_year":
+                                            row.ModelYear = int.TryParse(content, out int modelYear) ? modelYear : 0;
+                                            break;
+                                        case "make":
+                                            row.Make = content;
+                                            break;
+                                        case "model":
+                                            row.Model = content;
+                                            break;
+                                        case "ev_type":
+                                            row.EvType = content;
+                                            break;
+                                        case "electric_range":
+                                            row.ElectricRange = int.TryParse(content, out int electricRange) ? electricRange : 0;
+                                            break;
+                                        case "cafv_type":
+                                            row.CafvType = content;
+                                            break;
+                                        case "base_msrp":
+                                            row.BaseMsrp = decimal.TryParse(content, out decimal baseMsrp) ? baseMsrp : 0;
+                                            break;
+                                        case "legislative_district":
+                                            row.LegislativeDistrict = int.TryParse(content, out int legislativeDistrict) ? legislativeDistrict : 0;
+                                            break;
+                                        case "dol_vehicle_id":
+                                            row.DolVehicleId = long.TryParse(content, out long dolVehicleId) ? dolVehicleId : 0;
+                                            break;
+                                        case "geocoded_column":
+                                            row.GeocodedColumn = content;
+                                            break;
+                                        case "electric_utility":
+                                            row.ElectricUtility = content;
+                                            break;
+                                        case "_2020_census_tract":
+                                            row.CensusTract = content;
+                                            break;
+                                    }
+                                    // Skip to the end of the current element
+                                    while (reader.NodeType != XmlNodeType.EndElement)
+                                    {
+                                        reader.Read();
+                                        if (reader.NodeType == XmlNodeType.EndElement && reader.Name == elementName)
+                                        {
+                                            break;
+                                        }
+                                    }
+                                }
+                                else if (reader.NodeType == XmlNodeType.EndElement && reader.Name == "row")
+                                {
+                                    // End of this <row>, break out of the loop
+                                    break;
+                                }
+                            }
+                        }
+
+                        rows.Add(row);
+                        rowCount++;
+                    }
+                }
+            }
+
+            _allRows = rows;
 
             DisplayData(_allRows);
         }
@@ -80,12 +162,12 @@ namespace PerformanceDemoApp
 
             foreach (var row in rows)
             {
-                vehicleListView.Items.Add(new ListViewItem(new [] {
+                vehicleListView.Items.Add(new ListViewItem(new[] {
                     row.Id,
-                    row.Make,     
-                    row.Model,    
+                    row.Make,
+                    row.Model,
                     row.ModelYear.ToString(),
-                    row.EvType,  
+                    row.EvType,
                     row.ElectricRange + " km"
                 }));
             }
@@ -137,7 +219,7 @@ namespace PerformanceDemoApp
             labelGeocodedColumn.Text = "Geokodierte Spalte:";
             labelCensusTract.Text = "Zensus-Trakt:";
         }
-        
+
         private Row GetDetailsById(string id)
         {
             return _allRows.FirstOrDefault(row => row.Id == id);
@@ -180,12 +262,12 @@ namespace PerformanceDemoApp
 
                         foreach (ListViewItem item in vehicleListView.Items)
                         {
-                            item.BackColor = SystemColors.Window; 
+                            item.BackColor = SystemColors.Window;
                         }
 
                         foreach (ListViewItem item in vehicleListView.Items)
                         {
-                            if (watchedIds.Contains(item.SubItems[0].Text)) 
+                            if (watchedIds.Contains(item.SubItems[0].Text))
                             {
                                 item.BackColor = Color.LightGreen;
                             }
