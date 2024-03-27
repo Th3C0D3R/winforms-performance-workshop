@@ -4,6 +4,8 @@ using System.Data.SQLite;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Xml;
 using System.Xml.Linq;
@@ -156,34 +158,40 @@ namespace PerformanceDemoApp
         }
 
 
-        private void DisplayData(List<Row> rows)
+        private async Task DisplayData(List<Row> rows)
         {
-            var listViewItems = PrepareListViewItems(rows);
+            var listViewItems = await PrepareListViewItems(rows);
 
-            vehicleListView.BeginUpdate();
-            vehicleListView.Items.Clear();
-            vehicleListView.Items.AddRange(listViewItems);
-            vehicleListView.EndUpdate();
+            vehicleListView.Invoke(new Action(() =>
+            {
+                vehicleListView.BeginUpdate();
+                vehicleListView.Items.Clear();
+                vehicleListView.Items.AddRange(listViewItems);
+                vehicleListView.EndUpdate();
+            }));
         }
 
-        private ListViewItem[] PrepareListViewItems(List<Row> rows)
+        private async Task<ListViewItem[]> PrepareListViewItems(List<Row> rows, CancellationToken cancellationToken = default)
         {
-            var listViewItems = new ListViewItem[rows.Count];
-
-            for (int i = 0; i < rows.Count; i++)
+            return await Task.Run(() =>
             {
-                var row = rows[i];
-                listViewItems[i] = new ListViewItem(new[] {
-                    row.Id,
-                    row.Make,
-                    row.Model,
-                    row.ModelYear.ToString(),
-                    row.EvType,
-                    $"{row.ElectricRange} km"
-                });
-            }
+                var listViewItems = new ListViewItem[rows.Count];
 
-            return listViewItems;
+                for (int i = 0; i < rows.Count; i++)
+                {
+                    var row = rows[i];
+                    listViewItems[i] = new ListViewItem(new[] {
+                        row.Id,
+                        row.Make,
+                        row.Model,
+                        row.ModelYear.ToString(),
+                        row.EvType,
+                        $"{row.ElectricRange} km"
+                    });
+                }
+
+                return listViewItems;
+            }, cancellationToken);
         }
 
         private void OnVehicleListViewChanged(object sender, EventArgs e)
