@@ -158,19 +158,32 @@ namespace PerformanceDemoApp
 
         private void DisplayData(List<Row> rows)
         {
-            vehicleListView.Items.Clear();
+            var listViewItems = PrepareListViewItems(rows);
 
-            foreach (var row in rows)
+            vehicleListView.BeginUpdate();
+            vehicleListView.Items.Clear();
+            vehicleListView.Items.AddRange(listViewItems);
+            vehicleListView.EndUpdate();
+        }
+
+        private ListViewItem[] PrepareListViewItems(List<Row> rows)
+        {
+            var listViewItems = new ListViewItem[rows.Count];
+
+            for (int i = 0; i < rows.Count; i++)
             {
-                vehicleListView.Items.Add(new ListViewItem(new[] {
+                var row = rows[i];
+                listViewItems[i] = new ListViewItem(new[] {
                     row.Id,
                     row.Make,
                     row.Model,
                     row.ModelYear.ToString(),
                     row.EvType,
-                    row.ElectricRange + " km"
-                }));
+                    $"{row.ElectricRange} km"
+                });
             }
+
+            return listViewItems;
         }
 
         private void OnVehicleListViewChanged(object sender, EventArgs e)
